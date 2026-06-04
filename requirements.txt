@@ -48,3 +48,5 @@ pydantic
 pydantic-settings
 requests
 tenacity
+
+transformers
