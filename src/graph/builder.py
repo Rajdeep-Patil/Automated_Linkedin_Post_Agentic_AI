@@ -13,8 +13,6 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from src.logging.logger import logger
 import sys
 import os
-import asyncio
-import selectors
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -46,7 +44,6 @@ class GraphBuilder:
             self.builder.add_node("tools", ToolNode(self.search_tools + self.linkedin_tools))
             self.builder.add_node("generate_post",self.generate_post_node.generate_post)
             self.builder.add_node("post_generate_search_tools", ToolNode(self.search_tools))
-            # self.builder.add_node("post_generate_linkedin_tool", ToolNode(self.linkedin_tools))
             self.builder.add_node("post_generate_linkedin_tool", self.linkedin_tool_node.linkedin_tool_node)
             self.builder.add_node("post_score",self.post_score_node.post_score)
             self.builder.add_node("regenerate_post",self.regenerate_post_node.regenerate_post)
