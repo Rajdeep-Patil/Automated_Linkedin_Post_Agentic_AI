@@ -263,30 +263,26 @@ if st.session_state.interrupt_state:
     with col1:
         if st.button("✅ Yes, Publish!", type="primary", use_container_width=True):
             with st.spinner("Publishing..."):
-                run_async(run_graph_with_postgres(action_type="resume", confirm_publish=True, token=linkedin_token))
+                run_async(run_graph_with_postgres(st.session_state["thread_id"], action_type="resume", confirm_publish=True, token=linkedin_token))
             st.rerun()
     with col2:
         if st.button("❌ Cancel", use_container_width=True):
             with st.spinner("Cancelling..."):
-                run_async(run_graph_with_postgres(action_type="resume", confirm_publish=False, token=linkedin_token))
+                run_async(run_graph_with_postgres(st.session_state["thread_id"], action_type="resume", confirm_publish=False, token=linkedin_token))
             st.rerun()
 
 elif user_input := st.chat_input("Kuch poochho ya LinkedIn post banwao..."):
     st.session_state.chat_history.append({"role": "user", "content": user_input})
     st.rerun()
 
-if (
-    st.session_state.chat_history
-    and st.session_state.chat_history[-1]["role"] == "user"
-    and not st.session_state.interrupt_state
-):
+# Agent response logic
+if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] == "user" and not st.session_state.interrupt_state:
     with st.spinner("Agent soch raha hai..."):
-        thread_id_val = st.session_state["thread_id"] # Pehle nikal lein
-
-asyncio.run(run_graph_with_postgres(
-    thread_id=thread_id_val, 
-    action_type="stream",
-    user_input=st.session_state.chat_history[-1]["content"],
-    token=linkedin_token
-    ))
+        # Yahan 'run_async' ka use karein, 'asyncio.run' ka nahi
+        run_async(run_graph_with_postgres(
+            thread_id=st.session_state["thread_id"],
+            action_type="stream",
+            user_input=st.session_state.chat_history[-1]["content"],
+            token=linkedin_token
+        ))
     st.rerun()
