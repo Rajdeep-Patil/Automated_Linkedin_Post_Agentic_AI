@@ -50,3 +50,4 @@ requests
 tenacity
 
 transformers
+torch
