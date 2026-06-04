@@ -12,7 +12,7 @@ mcp = FastMCP("linkedin_server")
 def linkedin_post(post_text: str, linkedin_access_token: str = None) -> str:
     """
     Publish a LinkedIn post.
-
+    
     Use only when the user explicitly asks to:
     - publish a post
     - post it on LinkedIn
@@ -24,19 +24,21 @@ def linkedin_post(post_text: str, linkedin_access_token: str = None) -> str:
     Returns:
         Publication status.
     """
-
     try:
-        token = linkedin_access_token or os.getenv("LINKEDIN_ACCESS_TOKEN")
-
+        token = os.getenv("LINKEDIN_ACCESS_TOKEN")
         if not token:
             return "LinkedIn access token not found."
 
-        profile_response = requests.get("https://api.linkedin.com/v2/userinfo",headers={"Authorization": f"Bearer {token}"},timeout=30)
+        profile_response = requests.get(
+            "https://api.linkedin.com/v2/userinfo",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30,
+        )
 
         if profile_response.status_code != 200:
-            return (f"Failed to fetch profile: "f"{profile_response.text}")
+            return f"Failed to fetch profile: {profile_response.text}"
 
-        person_id = profile_response.json().get("sub")
+        person_id  = profile_response.json().get("sub")
         author_urn = f"urn:li:person:{person_id}"
 
         payload = {
@@ -44,9 +46,7 @@ def linkedin_post(post_text: str, linkedin_access_token: str = None) -> str:
             "lifecycleState": "PUBLISHED",
             "specificContent": {
                 "com.linkedin.ugc.ShareContent": {
-                    "shareCommentary": {
-                        "text": post_text
-                    },
+                    "shareCommentary": {"text": post_text},
                     "shareMediaCategory": "NONE",
                 }
             },
@@ -54,6 +54,7 @@ def linkedin_post(post_text: str, linkedin_access_token: str = None) -> str:
                 "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
             },
         }
+
         response = requests.post(
             "https://api.linkedin.com/v2/ugcPosts",
             headers={
@@ -68,11 +69,12 @@ def linkedin_post(post_text: str, linkedin_access_token: str = None) -> str:
         if response.status_code == 201:
             return f"LinkedIn post published successfully.\n\n{post_text}"
 
-        return (f"LinkedIn API Error "f"{response.status_code}: "f"{response.text}")
+        return f"LinkedIn API Error {response.status_code}: {response.text}"
 
     except Exception as e:
-        raise RuntimeError(str(e))  
+        raise RuntimeError(str(e))
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8002))
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=port)

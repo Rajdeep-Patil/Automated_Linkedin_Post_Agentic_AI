@@ -15,7 +15,7 @@ def Search_tools(query: str) -> str:
 
     Use this tool when:
     - The user asks about current events, breaking news, or recent developments.
-    - The user mentions terms such as "today", "yesterday", "latest", "recent", "currently", or "news".
+    - The user mentions terms such as today, yesterday, latest, recent, currently, or news.
     - The user asks about companies, products, technologies, or public figures.
     - The user requests fact-checking or verification.
     - The user explicitly asks to search the web or online sources.
@@ -33,11 +33,13 @@ def Search_tools(query: str) -> str:
     """
     try:
         answer = client.search(query=query)
-        return "\n\n".join(result.get("content", "") for result in answer.get("results", []))
-
+        return "\n\n".join(
+            result.get("content", "")
+            for result in answer.get("results", [])
+        )
     except Exception as e:
         raise RuntimeError(str(e))
 
-
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8001))
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=port)

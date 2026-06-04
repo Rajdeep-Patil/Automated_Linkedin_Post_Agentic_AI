@@ -1,32 +1,28 @@
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from src.logging.logger import logger
 from src.exception.exception import AutomatedLinkedinPostAgent
-from src.config import constants
-import sys
 import os
-
-
+import sys
 class SearchMCPClient:
-
     async def get_tools(self):
-
         try:
+            logger.info("Initializing Search MCP Client (HTTP)...")
 
-            logger.info("Initializing Search MCP Client")
+            url = os.getenv("SEARCH_SERVER_URL")  
+            if not url:
+                raise ValueError("SEARCH_SERVER_URL environment variable not set!")
 
             client = MultiServerMCPClient(
                 {
                     "search": {
-                        "command": constants.PYTHON_PATH,
-                        "args": [constants.SEARCH_SERVER_PATH],
-                        "transport": "stdio",
+                        "url": url,
+                        "transport": "streamable_http",
                     }
                 }
             )
 
-            logger.info("Loading MCP tools...")
             tools = await client.get_tools()
-            logger.info(f"MCP tools loaded | Count={len(tools)}")
+            logger.info(f"Search MCP tools loaded | Count={len(tools)}")
             return tools
 
         except Exception as e:
