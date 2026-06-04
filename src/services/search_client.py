@@ -23,9 +23,9 @@ class SearchMCPClient:
                                     }
                                 }
                             ) as client:
-            tools = await client.get_tools()
-            logger.info(f"Search MCP tools loaded | Count={len(tools)}")
-            return tools
+                                tools = await client.get_tools()
+                                logger.info(f"Search MCP tools loaded | Count={len(tools)}")
+                                return tools
 
         except Exception as e:
             logger.exception("Failed to initialize Search MCP Client")
