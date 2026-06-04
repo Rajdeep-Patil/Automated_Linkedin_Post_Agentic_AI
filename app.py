@@ -5,7 +5,7 @@ import uuid
 import concurrent.futures
 import streamlit as st
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage
 
 load_dotenv()
 
@@ -31,31 +31,10 @@ def run_async(coro):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Session state — EK JAGAH, SABSE PEHLE initialize karo
-# set_page_config ke baad, har cheez se pehle.
-# Yahi AttributeError ka root-cause fix hai.
-# st.session_state.clear() ke baad bhi agli render pe yeh block
-# saare keys wapas bana deta hai.
-# ─────────────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="LinkedIn Automation Agent", page_icon="💼", layout="centered")
-
-_DEFAULTS: dict = {
-    "user_id":         None,
-    "chat_threads":    [],
-    "thread_id":       None,
-    "chat_history":    [],
-    "interrupt_state": False,
-    "post_content":    "",
-    "is_processing":   False,
-    "linkedin_token":  "",
-}
-for _k, _v in _DEFAULTS.items():
-    if _k not in st.session_state:
-        st.session_state[_k] = _v
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Async helpers
+# Async helpers — IMPORTANT: ye functions st.session_state ko KABHI touch
+# nahi karte. Sirf data return karte hain. State update main thread mein hoti.
+# Background thread mein st.session_state access karna ScriptRunContext error
+# deta hai — yahi asli bug tha.
 # ─────────────────────────────────────────────────────────────────────────────
 async def get_all_threads_for_user(user_email: str) -> list[str]:
     DB_URI = os.getenv("DB_URI")
@@ -94,7 +73,26 @@ async def run_graph_with_postgres(
     user_input: str = None,
     confirm_publish: bool = True,
     token: str = None,
-):
+) -> dict:
+    """
+    Returns a result dict — st.session_state ko bilkul touch nahi karta.
+    Caller (main Streamlit thread) state update karega.
+
+    Return format:
+    {
+        "messages":        list[dict]  — chat messages to append
+        "interrupt_state": bool,
+        "post_content":    str,
+        "error":           str | None,
+    }
+    """
+    result = {
+        "messages":        [],
+        "interrupt_state": False,
+        "post_content":    "",
+        "error":           None,
+    }
+
     config = {
         "configurable": {
             "thread_id": thread_id,
@@ -142,7 +140,7 @@ async def run_graph_with_postgres(
                 if confirm_publish:
                     async for _ in graph.astream(None, config, stream_mode="values"):
                         pass
-                    st.session_state.chat_history.append(
+                    result["messages"].append(
                         {"role": "agent", "content": "✅ Post LinkedIn pe successfully publish ho gayi!"}
                     )
                 else:
@@ -151,13 +149,13 @@ async def run_graph_with_postgres(
                         {"cancel_publish": True},
                         as_node="post_generate_linkedin_tool",
                     )
-                    st.session_state.chat_history.append(
+                    result["messages"].append(
                         {"role": "agent", "content": "❌ Publishing cancel ho gayi. Kuch aur poochho!"}
                     )
-
-                st.session_state.interrupt_state = False
-                st.session_state.post_content    = ""
-                return
+                # resume ke baad interrupt clear
+                result["interrupt_state"] = False
+                result["post_content"]    = ""
+                return result
 
             # ── state check ──────────────────────────────────────────────────
             current_state  = await graph.aget_state(config)
@@ -165,7 +163,7 @@ async def run_graph_with_postgres(
                 current_state.next
                 and "post_generate_linkedin_tool" in current_state.next
             )
-            st.session_state.interrupt_state = is_interrupted
+            result["interrupt_state"] = is_interrupted
 
             if is_interrupted:
                 msgs = current_state.values.get("messages", [])
@@ -179,7 +177,7 @@ async def run_graph_with_postgres(
                     ),
                     "",
                 )
-                st.session_state.post_content = post_text
+                result["post_content"] = post_text
 
             else:
                 msgs  = current_state.values.get("messages", [])
@@ -193,20 +191,33 @@ async def run_graph_with_postgres(
                         else (last.content or "")
                     )
                     if content.strip():
-                        st.session_state.chat_history.append(
-                            {"role": "agent", "content": content}
-                        )
+                        result["messages"].append({"role": "agent", "content": content})
 
                 if score is not None and score > 0:
-                    st.session_state.chat_history.append(
+                    result["messages"].append(
                         {"role": "agent", "content": f"⭐ Post Score: {score}/10"}
                     )
 
     except Exception as e:
         logger.exception(f"Graph run failed: {e}")
+        result["error"] = str(e)
+
+    return result
+
+
+def apply_graph_result(res: dict):
+    """
+    Graph ke result ko main Streamlit thread mein session_state pe apply karo.
+    Sirf is function mein st.session_state touch hota hai.
+    """
+    if res.get("error"):
         st.session_state.chat_history.append(
-            {"role": "agent", "content": f"❌ Error: {str(e)}"}
+            {"role": "agent", "content": f"❌ Error: {res['error']}"}
         )
+    else:
+        st.session_state.chat_history.extend(res.get("messages", []))
+        st.session_state.interrupt_state = res["interrupt_state"]
+        st.session_state.post_content    = res["post_content"]
 
 
 def reset_chat(current_user: str):
@@ -220,14 +231,29 @@ def reset_chat(current_user: str):
 
 
 def logout():
-    """
-    st.session_state.clear() ki jagah selective reset karo.
-    Isse _DEFAULTS block wale keys turant wapas ban jayenge agle render pe —
-    AttributeError nahi aayega.
-    """
+    """selective reset — clear() nahi, warna defaults dobara set nahi honge."""
     for k, v in _DEFAULTS.items():
-        # list/dict ke liye fresh copy do
         st.session_state[k] = v.copy() if isinstance(v, (list, dict)) else v
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Page config + session state defaults (SABSE PEHLE)
+# ─────────────────────────────────────────────────────────────────────────────
+st.set_page_config(page_title="LinkedIn Automation Agent", page_icon="💼", layout="centered")
+
+_DEFAULTS: dict = {
+    "user_id":         None,
+    "chat_threads":    [],
+    "thread_id":       None,
+    "chat_history":    [],
+    "interrupt_state": False,
+    "post_content":    "",
+    "is_processing":   False,
+    "linkedin_token":  "",
+}
+for _k, _v in _DEFAULTS.items():
+    if _k not in st.session_state:
+        st.session_state[_k] = _v.copy() if isinstance(_v, (list, dict)) else _v
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -260,7 +286,6 @@ if not st.session_state.user_id:
 
 CURRENT_USER = st.session_state.user_id
 
-# thread_id — pehli baar ya logout ke baad set karo
 if not st.session_state.thread_id:
     new_tid = f"{CURRENT_USER}_thread_{str(uuid.uuid4())[:8]}"
     st.session_state.thread_id = new_tid
@@ -268,7 +293,7 @@ if not st.session_state.thread_id:
         st.session_state.chat_threads.append(new_tid)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sidebar — threads + LinkedIn token
+# Sidebar — threads + token
 # ─────────────────────────────────────────────────────────────────────────────
 st.sidebar.subheader("💬 Chat Threads")
 if st.sidebar.button("➕ New Chat"):
@@ -297,7 +322,6 @@ if st.session_state.chat_threads:
         ]
         st.rerun()
 
-# LinkedIn token — session_state mein persist karo
 raw_token = st.sidebar.text_input(
     "🔑 LinkedIn Access Token",
     type="password",
@@ -326,7 +350,7 @@ if st.session_state.interrupt_state:
     with col1:
         if st.button("✅ Yes, Publish!", type="primary", use_container_width=True):
             with st.spinner("Publishing..."):
-                run_async(
+                res = run_async(
                     run_graph_with_postgres(
                         st.session_state.thread_id,
                         action_type="resume",
@@ -334,11 +358,12 @@ if st.session_state.interrupt_state:
                         token=st.session_state.linkedin_token,
                     )
                 )
+            apply_graph_result(res)
             st.rerun()
     with col2:
         if st.button("❌ Cancel", use_container_width=True):
             with st.spinner("Cancelling..."):
-                run_async(
+                res = run_async(
                     run_graph_with_postgres(
                         st.session_state.thread_id,
                         action_type="resume",
@@ -346,6 +371,7 @@ if st.session_state.interrupt_state:
                         token=st.session_state.linkedin_token,
                     )
                 )
+            apply_graph_result(res)
             st.rerun()
 
 # ── User input ───────────────────────────────────────────────────────────────
@@ -363,7 +389,7 @@ if (
     and st.session_state.is_processing
 ):
     with st.spinner("Agent soch raha hai..."):
-        run_async(
+        res = run_async(
             run_graph_with_postgres(
                 thread_id=st.session_state.thread_id,
                 action_type="stream",
@@ -371,5 +397,6 @@ if (
                 token=st.session_state.linkedin_token,
             )
         )
+    apply_graph_result(res)
     st.session_state.is_processing = False
     st.rerun()
