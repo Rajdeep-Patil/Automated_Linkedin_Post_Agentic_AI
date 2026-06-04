@@ -13,16 +13,15 @@ class LinkedInMCPClient:
             python_path = constants.PYTHON_PATH
             server_path = constants.LINKEDIN_SERVER_PATH
 
-            client = MultiServerMCPClient(
-                {
-                    "search": {
-                        "command":python_path,
-                        "args": server_path,
-                        "transport": "stdio",
-                    }
-                }
-            )
-
+            async with MultiServerMCPClient(
+                                    {
+                                        "search": {
+                                            "command": python_path,
+                                            "args": server_path,
+                                            "transport": "stdio",
+                                        }
+                                    }
+                                ) as client:
 
             tools = await client.get_tools()
             logger.info(f"LinkedIn MCP tools loaded | Count={len(tools)}")

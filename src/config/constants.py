@@ -107,9 +107,11 @@ DEFAULT_USER_ID = "guest"
 import sys
 import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # src/config/
+PROJECT_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))  # project root (Automated_LinkedIn_Post_Agent/)
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")  # src/
+
 PYTHON_PATH = sys.executable
 
-# constants.py ki location se src/services tak ka path
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # yeh src/services/ hai
-SEARCH_SERVER_PATH = [os.path.join(BASE_DIR, "src","tools","search_server.py")]
-LINKEDIN_SERVER_PATH = [os.path.join(BASE_DIR, "src","tools","linkedin_server.py")]
+SEARCH_SERVER_PATH = [os.path.join(SRC_DIR, "tools", "search_server.py")]
+LINKEDIN_SERVER_PATH = [os.path.join(SRC_DIR, "tools", "linkedin_server.py")]
