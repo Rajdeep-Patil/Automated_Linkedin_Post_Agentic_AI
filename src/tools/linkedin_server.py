@@ -5,13 +5,14 @@ import requests
 from fastmcp import FastMCP, Context
 from langchain_core.runnables import RunnableConfig
 from typing import Annotated
+from pydantic import Field
 
 mcp = FastMCP("linkedin_server")
 
 @mcp.tool()
-def linkedin_post(post_text: str, linkedin_access_token: str) -> str:
+def linkedin_post(post_text: str, linkedin_access_token:Annotated[str, Field(exclude=True, default="")] = "")-> str:
     """
-    Publish a LinkedIn post.
+    Publish a LinkedIn post on LinkedIn.
 
     Use only when the user explicitly asks to:
     - publish a post
@@ -19,16 +20,16 @@ def linkedin_post(post_text: str, linkedin_access_token: str) -> str:
     - share it on LinkedIn
 
     Args:
-        post_text: Final LinkedIn post content.
-        linkedin_access_token: LinkedIn OAuth access token.
+        post_text: Final LinkedIn post content to publish.
 
     Returns:
         Publication status.
     """
-    token = linkedin_access_token.strip()
+    token = linkedin_access_token.strip() or os.getenv("LINKEDIN_ACCESS_TOKEN", "").strip()
 
     if not token:
-        return "❌ ERROR: LinkedIn Access Token missing. Kripya sidebar mein token daalein."
+        return "LinkedIn Access Token is missing! Please add your token in the sidebar and try again."
+
     
     try:
         profile_response = requests.get(
