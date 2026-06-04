@@ -1,4 +1,5 @@
 langchain
+langchain-groq
 langchain-core
 langchain-community
 langchain-huggingface
