@@ -6,6 +6,7 @@ import concurrent.futures
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage
+
 load_dotenv()
 
 if sys.platform == "win32":
@@ -19,10 +20,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from src.logging.logger import logger
 
 # ─────────────────────────────────────────────────────────────────────────────
-# run_async — THE KEY FIX
-# Streamlit Cloud pe event loop already running hoti hai, isliye
-# run_until_complete() kaam nahi karta.
-# Solution: dedicated background thread mein asyncio.run() chalao.
+# Thread pool — Streamlit ke sync context se async safely chalane ke liye
 # ─────────────────────────────────────────────────────────────────────────────
 _THREAD_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
@@ -35,13 +33,17 @@ def run_async(coro):
 # ─────────────────────────────────────────────────────────────────────────────
 # Async helpers
 # ─────────────────────────────────────────────────────────────────────────────
-async def get_all_threads_for_user(user_email):
+async def get_all_threads_for_user(user_email: str) -> list[str]:
+    """
+    FIX #2: DB connection ab sirf is function ke scope mein hai.
+    FIX #3: limit badha ke 500 kar diya taaki user ke saare threads mile.
+    """
     DB_URI = os.getenv("DB_URI")
     try:
         async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
             await checkpointer.setup()
             all_threads = []
-            async for thread in checkpointer.list(limit=50):
+            async for thread in checkpointer.list(limit=500):
                 thread_id = thread.config["configurable"]["thread_id"]
                 if thread_id.startswith(user_email):
                     all_threads.append(thread_id)
@@ -51,27 +53,44 @@ async def get_all_threads_for_user(user_email):
         return []
 
 
-async def load_conversation_from_postgres(thread_id):
+async def load_conversation_from_postgres(thread_id: str) -> list:
+    """
+    FIX #6: Graph build karne ki zaroorat nahi sirf state padhne ke liye.
+            Seedha checkpointer se state lo.
+    """
     DB_URI = os.getenv("DB_URI")
     config = {"configurable": {"thread_id": thread_id}}
     try:
-        model = LLMServices().get_model()
-        builder = GraphBuilder(model, model, [], []).build()
         async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
             await checkpointer.setup()
-            graph = builder.compile(checkpointer=checkpointer)
-            state = await graph.aget_state(config)
-            return state.values.get("messages", [])
+            checkpoint = await checkpointer.aget(config)
+            if checkpoint is None:
+                return []
+            return checkpoint.get("channel_values", {}).get("messages", [])
     except Exception as e:
         logger.error(f"Failed to load conversation: {e}")
         return []
 
-async def run_graph_with_postgres(thread_id, action_type="stream", user_input=None, confirm_publish=True, token=None):
-    if token:
-        os.environ["LINKEDIN_ACCESS_TOKEN"] = token
 
-    config    = {"configurable": {"thread_id": thread_id, "linkedin_access_token": token}}
-    DB_URI    = os.getenv("DB_URI")
+async def run_graph_with_postgres(
+    thread_id: str,
+    action_type: str = "stream",
+    user_input: str = None,
+    confirm_publish: bool = True,
+    token: str = None,
+):
+    """
+    FIX #7: os.environ mutation hata di — token sirf config ke through jayega.
+    FIX #1: Cancel logic sahi kiya — graph ko proper signal diya jata hai.
+    """
+    # Token sirf config ke through pass karo, global env ko mat chhuo
+    config = {
+        "configurable": {
+            "thread_id": thread_id,
+            "linkedin_access_token": token or "",
+        }
+    }
+    DB_URI = os.getenv("DB_URI")
 
     try:
         model          = LLMServices().get_model()
@@ -93,50 +112,73 @@ async def run_graph_with_postgres(thread_id, action_type="stream", user_input=No
                 interrupt_before=["post_generate_linkedin_tool"],
             )
 
-            # ── stream: user ne kuch likha ──────────────────────────────────
+            # ── stream: user ne naya message bheja ──────────────────────────
             if action_type == "stream" and user_input:
                 async for _ in graph.astream(
-                    {"messages": [HumanMessage(content=user_input)],
-                    "iteration": 0, "max_iteration": 3, "score": 0.0},
-                    config, stream_mode="values",
+                    {
+                        "messages": [HumanMessage(content=user_input)],
+                        "iteration": 0,
+                        "max_iteration": 3,
+                        "score": 0.0,
+                    },
+                    config,
+                    stream_mode="values",
                 ):
                     pass
 
-            # ── resume: publish / cancel ─────────────────────────────────────
+            # ── resume: publish ya cancel ────────────────────────────────────
             elif action_type == "resume":
                 if confirm_publish:
+                    # FIX #1 (publish): None pass karo taaki graph interrupt ke
+                    # baad se resume ho
                     async for _ in graph.astream(None, config, stream_mode="values"):
                         pass
                     st.session_state.chat_history.append(
                         {"role": "agent", "content": "✅ Post LinkedIn pe successfully publish ho gayi!"}
                     )
                 else:
-                    await graph.aupdate_state(config, {"messages": []}, as_node="chat_or_post")
+                    # FIX #1 (cancel): State mein cancel_publish=True set karo
+                    # taaki graph node properly handle kar sake.
+                    # Empty messages list dene se kuch nahi hota tha — yeh sahi fix hai.
+                    await graph.aupdate_state(
+                        config,
+                        {"cancel_publish": True},
+                        as_node="post_generate_linkedin_tool",
+                    )
                     st.session_state.chat_history.append(
                         {"role": "agent", "content": "❌ Publishing cancel ho gayi. Kuch aur poochho!"}
                     )
+
                 st.session_state.interrupt_state = False
+                st.session_state.post_content = ""
                 return
 
             # ── state check ──────────────────────────────────────────────────
             current_state = await graph.aget_state(config)
             is_interrupted = bool(
-                current_state.next and "post_generate_linkedin_tool" in current_state.next
+                current_state.next
+                and "post_generate_linkedin_tool" in current_state.next
             )
             st.session_state.interrupt_state = is_interrupted
 
             if is_interrupted:
                 msgs = current_state.values.get("messages", [])
                 post_text = next(
-                    (m.content for m in reversed(msgs)
-                    if hasattr(m, "content") and isinstance(m.content, str) and m.content.strip()),
-                    ""
+                    (
+                        m.content
+                        for m in reversed(msgs)
+                        if hasattr(m, "content")
+                        and isinstance(m.content, str)
+                        and m.content.strip()
+                    ),
+                    "",
                 )
                 st.session_state.post_content = post_text
 
             else:
-                msgs = current_state.values.get("messages", [])
+                msgs  = current_state.values.get("messages", [])
                 score = current_state.values.get("score", None)
+
                 if msgs:
                     last = msgs[-1]
                     content = (
@@ -145,25 +187,33 @@ async def run_graph_with_postgres(thread_id, action_type="stream", user_input=No
                         else (last.content or "")
                     )
                     if content.strip():
-                        st.session_state.chat_history.append({"role": "agent", "content": content})
-                if score and score > 0:
+                        st.session_state.chat_history.append(
+                            {"role": "agent", "content": content}
+                        )
+
+                # FIX #8: None check clear kar diya
+                if score is not None and score > 0:
                     st.session_state.chat_history.append(
                         {"role": "agent", "content": f"⭐ Post Score: {score}/10"}
                     )
 
     except Exception as e:
         logger.exception(f"Graph run failed: {e}")
-        st.session_state.chat_history.append({"role": "agent", "content": f"❌ Error: {str(e)}"})
+        st.session_state.chat_history.append(
+            {"role": "agent", "content": f"❌ Error: {str(e)}"}
+        )
 
 
-def reset_chat(current_user):
+def reset_chat(current_user: str):
     new_id = f"{current_user}_thread_{str(uuid.uuid4())[:8]}"
     st.session_state["thread_id"] = new_id
     if new_id not in st.session_state.get("chat_threads", []):
         st.session_state["chat_threads"].append(new_id)
-    st.session_state.chat_history   = []
-    st.session_state.interrupt_state = False
-    st.session_state.post_content   = ""
+    st.session_state.chat_history    = []
+    st.session_state.interrupt_state  = False
+    st.session_state.post_content    = ""
+    # FIX #5: Processing guard reset karo
+    st.session_state.is_processing   = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -172,11 +222,20 @@ def reset_chat(current_user):
 st.set_page_config(page_title="LinkedIn Automation Agent", page_icon="💼", layout="centered")
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Session state defaults — sab pehle initialize karo
+# ─────────────────────────────────────────────────────────────────────────────
+if "user_id"         not in st.session_state: st.session_state["user_id"]         = None
+if "chat_threads"    not in st.session_state: st.session_state["chat_threads"]    = []
+if "chat_history"    not in st.session_state: st.session_state["chat_history"]    = []
+if "interrupt_state" not in st.session_state: st.session_state["interrupt_state"] = False
+if "post_content"    not in st.session_state: st.session_state["post_content"]    = ""
+if "is_processing"   not in st.session_state: st.session_state["is_processing"]   = False
+# FIX #4: linkedin_token session state mein store karo
+if "linkedin_token"  not in st.session_state: st.session_state["linkedin_token"]  = ""
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Sidebar — login
 # ─────────────────────────────────────────────────────────────────────────────
-if "user_id" not in st.session_state:
-    st.session_state["user_id"] = None
-
 st.sidebar.subheader("👤 User Account")
 
 if not st.session_state["user_id"]:
@@ -186,7 +245,8 @@ if not st.session_state["user_id"]:
             st.session_state["user_id"] = user_email.lower().strip()
             existing = run_async(get_all_threads_for_user(st.session_state["user_id"]))
             st.session_state["chat_threads"] = (
-                existing if existing
+                existing
+                if existing
                 else [f"{st.session_state['user_id']}_thread_{str(uuid.uuid4())[:8]}"]
             )
             st.session_state["thread_id"] = st.session_state["chat_threads"][0]
@@ -203,17 +263,7 @@ if not st.session_state["user_id"]:
 
 CURRENT_USER = st.session_state["user_id"]
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Session state defaults — PEHLE set karo, baad mein use karo
-# ─────────────────────────────────────────────────────────────────────────────
-if "chat_threads" not in st.session_state:
-    st.session_state["chat_threads"] = []
-if "chat_history" not in st.session_state:
-    st.session_state["chat_history"] = []
-if "interrupt_state" not in st.session_state:
-    st.session_state["interrupt_state"] = False
-if "post_content" not in st.session_state:
-    st.session_state["post_content"] = ""
+# thread_id default (login ke baad pehli baar)
 if "thread_id" not in st.session_state:
     new_tid = f"{CURRENT_USER}_thread_{str(uuid.uuid4())[:8]}"
     st.session_state["thread_id"] = new_tid
@@ -230,18 +280,34 @@ if st.sidebar.button("➕ New Chat"):
 
 if st.session_state.get("chat_threads"):
     options = st.session_state["chat_threads"]
-    cur_idx = options.index(st.session_state["thread_id"]) if st.session_state["thread_id"] in options else 0
+    cur_idx = (
+        options.index(st.session_state["thread_id"])
+        if st.session_state["thread_id"] in options
+        else 0
+    )
     selected = st.sidebar.selectbox("Select Thread:", options, index=cur_idx)
     if selected != st.session_state["thread_id"]:
-        st.session_state["thread_id"] = selected
+        st.session_state["thread_id"]    = selected
+        st.session_state["is_processing"] = False  # FIX #5: guard reset
         msgs = run_async(load_conversation_from_postgres(selected))
         st.session_state.chat_history = [
-            {"role": "user" if isinstance(m, HumanMessage) else "agent", "content": m.content}
-            for m in msgs if hasattr(m, "content") and isinstance(m.content, str)
+            {
+                "role": "user" if isinstance(m, HumanMessage) else "agent",
+                "content": m.content,
+            }
+            for m in msgs
+            if hasattr(m, "content") and isinstance(m.content, str)
         ]
         st.rerun()
 
-linkedin_token = st.sidebar.text_input("🔑 LinkedIn Access Token", type="password")
+# FIX #4: Token ko session_state mein save karo taaki rerun pe bhi mile
+raw_token = st.sidebar.text_input(
+    "🔑 LinkedIn Access Token",
+    type="password",
+    value=st.session_state["linkedin_token"],
+)
+if raw_token != st.session_state["linkedin_token"]:
+    st.session_state["linkedin_token"] = raw_token
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main UI
@@ -252,39 +318,63 @@ for msg in st.session_state.chat_history:
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
         st.markdown(msg["content"])
 
-# Publish confirmation
+# ── Publish confirmation ─────────────────────────────────────────────────────
 if st.session_state.interrupt_state:
     st.warning("⚠️ Agent LinkedIn pe post karna chahta hai. Approve karo?")
     if st.session_state.post_content:
         with st.expander("📝 Post Preview", expanded=True):
             st.write(st.session_state.post_content)
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("✅ Yes, Publish!", type="primary", use_container_width=True):
             with st.spinner("Publishing..."):
-                run_async(run_graph_with_postgres(st.session_state["thread_id"], action_type="resume", confirm_publish=True, token=linkedin_token))
+                run_async(
+                    run_graph_with_postgres(
+                        st.session_state["thread_id"],
+                        action_type="resume",
+                        confirm_publish=True,
+                        token=st.session_state["linkedin_token"],  # FIX #4
+                    )
+                )
             st.rerun()
     with col2:
         if st.button("❌ Cancel", use_container_width=True):
             with st.spinner("Cancelling..."):
-                run_async(run_graph_with_postgres(st.session_state["thread_id"], action_type="resume", confirm_publish=False, token=linkedin_token))
+                run_async(
+                    run_graph_with_postgres(
+                        st.session_state["thread_id"],
+                        action_type="resume",
+                        confirm_publish=False,
+                        token=st.session_state["linkedin_token"],  # FIX #4
+                    )
+                )
             st.rerun()
 
+# ── User input ───────────────────────────────────────────────────────────────
 elif user_input := st.chat_input("Kuch poochho ya LinkedIn post banwao..."):
-    st.session_state.chat_history.append({"role": "user", "content": user_input})
-    st.rerun()
+    # FIX #5: Duplicate execution guard — agar already processing chal rahi hai toh ignore karo
+    if not st.session_state["is_processing"]:
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        st.session_state["is_processing"] = True
+        st.rerun()
 
-# Agent response logic
-# CODE KE END MEIN YE REPLACEMENT KAREIN:
-if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] == "user" and not st.session_state.interrupt_state:
+# ── Agent response ───────────────────────────────────────────────────────────
+if (
+    st.session_state.chat_history
+    and st.session_state.chat_history[-1]["role"] == "user"
+    and not st.session_state.interrupt_state
+    and st.session_state["is_processing"]  # FIX #5: sirf tab chalao jab guard set ho
+):
     with st.spinner("Agent soch raha hai..."):
-        tid = st.session_state["thread_id"]
-        last_msg = st.session_state.chat_history[-1]["content"]
-        
-        run_async(run_graph_with_postgres(
-            thread_id=tid,
-            action_type="stream",
-            user_input=last_msg,
-            token=linkedin_token
-        ))
+        run_async(
+            run_graph_with_postgres(
+                thread_id=st.session_state["thread_id"],
+                action_type="stream",
+                user_input=st.session_state.chat_history[-1]["content"],
+                token=st.session_state["linkedin_token"],  # FIX #4
+            )
+        )
+    # FIX #5: Processing khatam — guard hatao
+    st.session_state["is_processing"] = False
     st.rerun()
