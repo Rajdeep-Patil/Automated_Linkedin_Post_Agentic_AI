@@ -14,18 +14,18 @@ class SearchMCPClient:
             python_path = constants.PYTHON_PATH
             server_path = constants.SEARCH_SERVER_PATH
 
-            async with MultiServerMCPClient(
-                                {
-                                    "search": {
-                                        "command": python_path,
-                                        "args": server_path,
-                                        "transport": "stdio",
-                                    }
-                                }
-                            ) as client:
-                                tools = await client.get_tools()
-                                logger.info(f"Search MCP tools loaded | Count={len(tools)}")
-                                return tools
+            client = MultiServerMCPClient(
+                {
+                    "search": {
+                        "command": python_path,
+                        "args": server_path,
+                        "transport": "stdio",
+                    }
+                }
+            )
+            tools = await client.get_tools()
+            logger.info(f"Search MCP tools loaded | Count={len(tools)}")
+            return tools
 
         except Exception as e:
             logger.exception("Failed to initialize Search MCP Client")
