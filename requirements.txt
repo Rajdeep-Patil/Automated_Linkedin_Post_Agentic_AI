@@ -18,3 +18,36 @@ python-dotenv
 streamlit
 psycopg[binary]
 pywin32; sys_platform == "win32"
+
+
+# ```pip-requirements
+# langchain
+# langchain-core
+# langchain-community
+# langchain-groq
+# langchain-google-genai
+# langchain-huggingface
+# langchain-mcp-adapters
+# langchain-together
+# langchain-ollama
+# langchain-tavily
+# langgraph
+# sentence-transformers
+# fastmcp
+# mcp
+# tavily-python
+# pydantic
+# pywin32
+# pillow
+# tiktoken 
+# requests 
+# python-dotenv
+# streamlit
+# streamlit
+# langgraph-checkpoint-postgres 
+# psycopg[binary]
+# torch
+# torchvision 
+# torchaudio
+# python-dotenv
+# ```
