@@ -6,9 +6,6 @@ import concurrent.futures
 import warnings
 warnings.filterwarnings("ignore", message="Using fallback GPT-2 tokenizer")
 
-for key, value in st.secrets.items():
-    os.environ[key] = value
-
 import streamlit as st
 # ... baaki imports neeche
 import streamlit as st
@@ -19,6 +16,9 @@ load_dotenv()
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
+for key, value in st.secrets.items():
+    os.environ[key] = value
 
 from src.services.llm_services import LLMServices
 from src.services.search_client import SearchMCPClient
