@@ -22,16 +22,12 @@ class LinkedInMCPClient:
             client = MultiServerMCPClient(
                 {
                     "search": {
-                        "command": python_path,
-                        "args": [server_path],
-                        "transport": "stdio",
-                    },
-                    "expense":{
-                        "transport":"streamable-http",
-                        "url":url
+                        "url": url,
+                        "transport": "streamable_http",
                     }
                 }
             )
+
 
             tools = await client.get_tools()
             logger.info(f"LinkedIn MCP tools loaded | Count={len(tools)}")

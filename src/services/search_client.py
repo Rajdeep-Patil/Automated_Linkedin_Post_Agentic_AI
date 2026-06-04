@@ -22,16 +22,12 @@ class SearchMCPClient:
             client = MultiServerMCPClient(
                 {
                     "search": {
-                        "command": python_path,
-                        "args": [server_path],
-                        "transport": "stdio",
-                    },
-                    "expense":{
-                        "transport":"streamable-http",
-                        "url":url
+                        "url": url,
+                        "transport": "streamable_http",
                     }
                 }
             )
+
 
             tools = await client.get_tools()
             logger.info(f"Search MCP tools loaded | Count={len(tools)}")
