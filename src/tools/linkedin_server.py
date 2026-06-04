@@ -10,7 +10,7 @@ from pydantic import Field
 mcp = FastMCP("linkedin_server")
 
 @mcp.tool()
-def linkedin_post(post_text: str, linkedin_access_token:Annotated[str, Field(exclude=True, default="")] = "")-> str:
+def linkedin_post(post_text: str, linkedin_access_token:str)-> str:
     """
     Publish a LinkedIn post on LinkedIn.
 
@@ -25,7 +25,7 @@ def linkedin_post(post_text: str, linkedin_access_token:Annotated[str, Field(exc
     Returns:
         Publication status.
     """
-    token = linkedin_access_token.strip() or os.getenv("LINKEDIN_ACCESS_TOKEN", "").strip()
+    token = linkedin_access_token
 
     if not token:
         return "LinkedIn Access Token is missing! Please add your token in the sidebar and try again."
