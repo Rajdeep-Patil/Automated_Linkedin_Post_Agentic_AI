@@ -306,7 +306,7 @@ else:
         st.rerun()
 
 if not st.session_state.user_id:
-    st.info("Pehle login karo apna Email ID se.")
+    st.info("Please login with your Email ID first.")
     st.stop()
 
 CURRENT_USER = st.session_state.user_id
