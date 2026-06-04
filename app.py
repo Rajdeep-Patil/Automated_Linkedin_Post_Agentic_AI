@@ -6,6 +6,9 @@ import concurrent.futures
 import warnings
 warnings.filterwarnings("ignore", message="Using fallback GPT-2 tokenizer")
 
+for key, value in st.secrets.items():
+    os.environ[key] = value
+
 import streamlit as st
 # ... baaki imports neeche
 import streamlit as st
