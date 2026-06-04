@@ -88,18 +88,28 @@ DEFAULT_USER_ID = "guest"
 
 # ── Cross-platform paths ──────────────────────────────────────────────────────
 # Windows pe venv ka python, Linux/Mac pe system python
-if sys.platform == "win32":
-    PYTHON_PATH = os.getenv(
-        "PYTHON_PATH",
-        r"E:\Automated_LinkedIn_Post_Agent\AutomatedLinkedinPostAgent\Scripts\python.exe"
-    )
-else:
-    PYTHON_PATH = sys.executable  # Streamlit Cloud pe current python use karo
+# if sys.platform == "win32":
+#     PYTHON_PATH = os.getenv(
+#         "PYTHON_PATH",
+#         r"E:\Automated_LinkedIn_Post_Agent\AutomatedLinkedinPostAgent\Scripts\python.exe"
+#     )
+# else:
+#     PYTHON_PATH = sys.executable  # Streamlit Cloud pe current python use karo
     
-PYTHON_PATH = r"E:\Automated_LinkedIn_Post_Agent\AutomatedLinkedinPostAgent\Scripts\python.exe"
+# PYTHON_PATH = r"E:\Automated_LinkedIn_Post_Agent\AutomatedLinkedinPostAgent\Scripts\python.exe"
 
-# Project root — jahan bhi script chal rahi ho wahan se src/ dhundo
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# # Project root — jahan bhi script chal rahi ho wahan se src/ dhundo
+# _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SEARCH_SERVER_PATH = [r"E:\Automated_LinkedIn_Post_Agent\src\tools\search_server.py"]
-LINKEDIN_SERVER_PATH = [r"E:\Automated_LinkedIn_Post_Agent\src\tools\linkedin_server.py"]
+# SEARCH_SERVER_PATH = [r"E:\Automated_LinkedIn_Post_Agent\src\tools\search_server.py"]
+# LINKEDIN_SERVER_PATH = [r"E:\Automated_LinkedIn_Post_Agent\src\tools\linkedin_server.py"]
+
+import sys
+import os
+
+PYTHON_PATH = sys.executable
+
+# constants.py ki location se src/services tak ka path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # yeh src/services/ hai
+SEARCH_SERVER_PATH = [os.path.join(BASE_DIR, "src","tools","search_server.py")]
+LINKEDIN_SERVER_PATH = [os.path.join(BASE_DIR, "src","tools","search_server.py")]

@@ -25,7 +25,7 @@ def linkedin_post(post_text: str, linkedin_access_token: str = None) -> str:
         Publication status.
     """
     try:
-        token = os.getenv("LINKEDIN_ACCESS_TOKEN")
+        token = linkedin_access_token
         if not token:
             return "LinkedIn access token not found."
 
