@@ -66,8 +66,7 @@ async def load_conversation_from_postgres(thread_id):
         logger.error(f"Failed to load conversation: {e}")
         return []
 
-
-async def run_graph_with_postgres(action_type="stream", user_input=None, confirm_publish=True, token=None):
+async def run_graph_with_postgres(thread_id, action_type="stream", user_input=None, confirm_publish=True, token=None):
     if token:
         os.environ["LINKEDIN_ACCESS_TOKEN"] = token
 
@@ -99,7 +98,7 @@ async def run_graph_with_postgres(action_type="stream", user_input=None, confirm
             if action_type == "stream" and user_input:
                 async for _ in graph.astream(
                     {"messages": [HumanMessage(content=user_input)],
-                     "iteration": 0, "max_iteration": 3, "score": 0.0},
+                    "iteration": 0, "max_iteration": 3, "score": 0.0},
                     config, stream_mode="values",
                 ):
                     pass
@@ -131,7 +130,7 @@ async def run_graph_with_postgres(action_type="stream", user_input=None, confirm
                 msgs = current_state.values.get("messages", [])
                 post_text = next(
                     (m.content for m in reversed(msgs)
-                     if hasattr(m, "content") and isinstance(m.content, str) and m.content.strip()),
+                    if hasattr(m, "content") and isinstance(m.content, str) and m.content.strip()),
                     ""
                 )
                 st.session_state.post_content = post_text
@@ -282,9 +281,12 @@ if (
     and not st.session_state.interrupt_state
 ):
     with st.spinner("Agent soch raha hai..."):
-        run_async(run_graph_with_postgres(
-            action_type="stream",
-            user_input=st.session_state.chat_history[-1]["content"],
-            token=linkedin_token,
-        ))
+        thread_id_val = st.session_state["thread_id"] # Pehle nikal lein
+
+asyncio.run(run_graph_with_postgres(
+    thread_id=thread_id_val, 
+    action_type="stream",
+    user_input=st.session_state.chat_history[-1]["content"],
+    token=linkedin_token
+    ))
     st.rerun()
