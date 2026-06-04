@@ -70,7 +70,6 @@ async def run_graph_with_postgres(thread_id, action_type="stream", user_input=No
     if token:
         os.environ["LINKEDIN_ACCESS_TOKEN"] = token
 
-    thread_id = st.session_state["thread_id"]
     config    = {"configurable": {"thread_id": thread_id, "linkedin_access_token": token}}
     DB_URI    = os.getenv("DB_URI")
 
@@ -276,13 +275,16 @@ elif user_input := st.chat_input("Kuch poochho ya LinkedIn post banwao..."):
     st.rerun()
 
 # Agent response logic
+# CODE KE END MEIN YE REPLACEMENT KAREIN:
 if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] == "user" and not st.session_state.interrupt_state:
     with st.spinner("Agent soch raha hai..."):
-        # Yahan 'run_async' ka use karein, 'asyncio.run' ka nahi
+        tid = st.session_state["thread_id"]
+        last_msg = st.session_state.chat_history[-1]["content"]
+        
         run_async(run_graph_with_postgres(
-            thread_id=st.session_state["thread_id"],
+            thread_id=tid,
             action_type="stream",
-            user_input=st.session_state.chat_history[-1]["content"],
+            user_input=last_msg,
             token=linkedin_token
         ))
     st.rerun()
