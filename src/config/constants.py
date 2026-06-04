@@ -112,4 +112,4 @@ PYTHON_PATH = sys.executable
 # constants.py ki location se src/services tak ka path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # yeh src/services/ hai
 SEARCH_SERVER_PATH = [os.path.join(BASE_DIR, "src","tools","search_server.py")]
-LINKEDIN_SERVER_PATH = [os.path.join(BASE_DIR, "src","tools","search_server.py")]
+LINKEDIN_SERVER_PATH = [os.path.join(BASE_DIR, "src","tools","linkedin_server.py")]
