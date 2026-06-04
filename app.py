@@ -164,7 +164,7 @@ async def run_graph_with_postgres(
                     )
                     result["messages"].append({
                         "role": "agent",
-                        "content": "⚠️ LinkedIn Access Token is missing! Please add your token in the sidebar and try again."
+                        "content": "LinkedIn Access Token is missing! Please add your token in the sidebar and try again."
                     })
                     result["interrupt_state"] = False
                     result["post_content"]    = ""
@@ -193,7 +193,7 @@ async def run_graph_with_postgres(
                     score = current_state.values.get("score", None)
                     if score is not None and score > 0:
                         result["messages"].append(
-                            {"role": "agent", "content": f"⭐ Post Score: {score}/10"}
+                            {"role": "agent", "content": f"Post Score: {score}/10"}
                         )
 
             # ── resume ───────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ async def run_graph_with_postgres(
                     async for _ in graph.astream(None, config, stream_mode="values"):
                         pass
                     result["messages"].append(
-                        {"role": "agent", "content": "✅ Post published successfully on LinkedIn!"}
+                        {"role": "agent", "content": "Post published successfully on LinkedIn!"}
                     )
                 else:
                     await graph.aupdate_state(
@@ -215,7 +215,7 @@ async def run_graph_with_postgres(
                         as_node="post_generate_linkedin_tool",
                     )
                     result["messages"].append(
-                        {"role": "agent", "content": "❌ Publishing cancelled. Feel free to ask anything else!"}
+                        {"role": "agent", "content": "Publishing cancelled. Feel free to ask anything else!"}
                     )
                 result["interrupt_state"] = False
                 result["post_content"]    = ""
@@ -277,7 +277,7 @@ def stream_agent_response(thread_id: str, user_input: str, token: str) -> dict:
 def apply_graph_result(res: dict, streamed_text: str = ""):
     if res.get("error"):
         st.session_state.chat_history.append(
-            {"role": "agent", "content": f"❌ Error: {res['error']}"}
+            {"role": "agent", "content": f"Error: {res['error']}"}
         )
     else:
         # Streamed text already display ho chuka — sirf save karo
@@ -342,7 +342,7 @@ for _k, _v in _DEFAULTS.items():
 # ─────────────────────────────────────────────────────────────────────────────
 # Sidebar — login / logout
 # ─────────────────────────────────────────────────────────────────────────────
-st.sidebar.subheader("👤 User Account")
+st.sidebar.subheader("User Account")
 
 if not st.session_state.user_id:
     user_email = st.sidebar.text_input("Enter your Email ID:")
@@ -364,7 +364,7 @@ else:
         st.rerun()
 
 if not st.session_state.user_id:
-    st.info("👈 Please login with your Email ID first.")
+    st.info("Please login with your Email ID first.")
     st.stop()
 
 CURRENT_USER = st.session_state.user_id
@@ -379,8 +379,8 @@ if not st.session_state.thread_id:
 # ─────────────────────────────────────────────────────────────────────────────
 # Sidebar — threads + token
 # ─────────────────────────────────────────────────────────────────────────────
-st.sidebar.subheader("💬 Chat Threads")
-if st.sidebar.button("➕ New Chat"):
+st.sidebar.subheader("Chat Threads")
+if st.sidebar.button("New Chat"):
     reset_chat(CURRENT_USER)
     st.rerun()
 
@@ -407,7 +407,7 @@ if st.session_state.chat_threads:
         st.rerun()
 
 raw_token = st.sidebar.text_input(
-    "🔑 LinkedIn Access Token",
+    "LinkedIn Access Token",
     type="password",
     value=st.session_state.linkedin_token,
 )
@@ -418,7 +418,7 @@ if raw_token != st.session_state.linkedin_token:
 # ─────────────────────────────────────────────────────────────────────────────
 # Main UI
 # ─────────────────────────────────────────────────────────────────────────────
-st.title("💼 AI LinkedIn Post Generator")
+st.title("AI LinkedIn Post Generator")
 
 for msg in st.session_state.chat_history:
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
@@ -426,14 +426,14 @@ for msg in st.session_state.chat_history:
 
 # ── Publish confirmation ──────────────────────────────────────────────────────
 if st.session_state.interrupt_state:
-    st.warning("⚠️ Agent wants to publish a post on LinkedIn. Do you approve?")
+    st.warning("Agent wants to publish a post on LinkedIn. Do you approve?")
     if st.session_state.post_content:
-        with st.expander("📝 Post Preview", expanded=True):
+        with st.expander("Post Preview", expanded=True):
             st.write(st.session_state.post_content)
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("✅ Yes, Publish!", type="primary", use_container_width=True):
+        if st.button("Yes, Publish!", type="primary", use_container_width=True):
             with st.spinner("Publishing..."):
                 res = run_async(
                     run_graph_with_postgres(
@@ -446,7 +446,7 @@ if st.session_state.interrupt_state:
             apply_graph_result(res)
             st.rerun()
     with col2:
-        if st.button("❌ Cancel", use_container_width=True):
+        if st.button("Cancel", use_container_width=True):
             with st.spinner("Cancelling..."):
                 res = run_async(
                     run_graph_with_postgres(
