@@ -3,8 +3,15 @@ import os
 from fastmcp import FastMCP
 from tavily import TavilyClient
 from dotenv import load_dotenv
-
 load_dotenv()
+
+try:
+    import streamlit as st
+    for key, value in st.secrets.items():
+        os.environ[key] = str(value)
+except Exception:
+    pass  
+
 
 mcp = FastMCP(name="search_server")
 
