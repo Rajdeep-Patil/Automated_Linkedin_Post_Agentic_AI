@@ -2,16 +2,18 @@ import os
 import sys
 import logging
 import requests
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 from langchain_core.runnables import RunnableConfig
+from typing import Annotated
 
 mcp = FastMCP("linkedin_server")
 
 @mcp.tool()
-def linkedin_post(post_text: str, config: RunnableConfig) -> str:
+def linkedin_post(post_text: str, config: Annotated[RunnableConfig, "config"],
+) -> str:
     """
     Publish a LinkedIn post.
-    
+
     Use only when the user explicitly asks to:
     - publish a post
     - post it on LinkedIn
@@ -23,11 +25,24 @@ def linkedin_post(post_text: str, config: RunnableConfig) -> str:
     Returns:
         Publication status.
     """
-    token = config["configurable"].get("linkedin_access_token")
-    try:
-        if not token:
-            return "ERROR: Token nahi mila, isliye request aage nahi badhegi."
+    # ── Token fetch karo — RunnableConfig ke configurable se ──
+    token = (
+        config.get("configurable", {}).get("linkedin_access_token")
+        if config
+        else None
+    )
 
+    # Fallback: environment variable
+    if not token:
+        token = os.getenv("LINKEDIN_ACCESS_TOKEN", "").strip()
+
+    if not token:
+        return (
+            "❌ ERROR: LinkedIn Access Token missing. "
+            "Kripya sidebar mein token daalein."
+        )
+    
+    try:
         profile_response = requests.get(
             "https://api.linkedin.com/v2/userinfo",
             headers={"Authorization": f"Bearer {token}"},
