@@ -76,5 +76,4 @@ def linkedin_post(post_text: str, linkedin_access_token: str = None) -> str:
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8002))
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+    mcp.run(transport="stdio")

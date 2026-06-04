@@ -4,20 +4,26 @@ from src.exception.exception import AutomatedLinkedinPostAgent
 from src.config import constants
 import os
 import sys
+
 class SearchMCPClient:
     async def get_tools(self):
         try:
-            logger.info("Initializing Search MCP Client (HTTP)...")
+            logger.info("Initializing Search MCP Client (stdio)...")
 
-            url = constants.SEARCH_SERVER_PATH
-            if not url:
-                raise ValueError("SEARCH_SERVER_URL environment variable not set!")
+            server_path = constants.SEARCH_SERVER_PATH
+            python_path = constants.PYTHON_PATH
+
+            if not server_path or not os.path.exists(server_path):
+                raise ValueError(
+                    f"Search server script not found at: {server_path}"
+                )
 
             client = MultiServerMCPClient(
                 {
                     "search": {
-                        "url": url,
-                        "transport": "streamable_http",
+                        "command": python_path,
+                        "args": [server_path],
+                        "transport": "stdio",
                     }
                 }
             )

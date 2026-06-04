@@ -41,5 +41,4 @@ def Search_tools(query: str) -> str:
         raise RuntimeError(str(e))
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8001))
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+    mcp.run(transport="stdio")
