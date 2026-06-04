@@ -10,19 +10,15 @@ class LinkedInMCPClient:
         try:
             logger.info("Initializing LinkedIn MCP Client (HTTP)...")
 
-            url = os.getenv(
-                "LINKEDIN_SERVER_URL",
-                "https://worthwhile-gold-fly.fastmcp.app/mcp"
-            )
-
-            if not url:
-                raise ValueError("SEARCH_SERVER_URL environment variable not set!")
+            python_path = constants.PYTHON_PATH
+            server_path = constants.LINKEDIN_SERVER_PATH
 
             client = MultiServerMCPClient(
                 {
                     "search": {
-                        "url": url,
-                        "transport": "streamable_http",
+                        "command":python_path,
+                        "args": server_path,
+                        "transport": "stdio",
                     }
                 }
             )

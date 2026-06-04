@@ -1,6 +1,7 @@
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from src.logging.logger import logger
 from src.exception.exception import AutomatedLinkedinPostAgent
+from src.config import constants
 import os
 import sys
 
@@ -10,19 +11,15 @@ class SearchMCPClient:
         try:
             logger.info("Initializing Search MCP Client (streamable-http)...")
 
-            url = os.getenv(
-                "SEARCH_SERVER_URL",
-                "https://circular-moccasin-marlin.fastmcp.app/mcp"
-            )
-
-            if not url:
-                raise ValueError("SEARCH_SERVER_URL environment variable not set!")
+            python_path = constants.PYTHON_PATH
+            server_path = constants.SEARCH_SERVER_PATH
 
             client = MultiServerMCPClient(
                 {
                     "search": {
-                        "url": url,
-                        "transport": "streamable_http",
+                        "command":python_path,
+                        "args": server_path,
+                        "transport": "stdio",
                     }
                 }
             )

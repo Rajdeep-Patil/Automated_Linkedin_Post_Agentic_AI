@@ -95,9 +95,11 @@ if sys.platform == "win32":
     )
 else:
     PYTHON_PATH = sys.executable  # Streamlit Cloud pe current python use karo
+    
+PYTHON_PATH = r"E:\Automated_LinkedIn_Post_Agent\AutomatedLinkedinPostAgent\Scripts\python.exe"
 
 # Project root — jahan bhi script chal rahi ho wahan se src/ dhundo
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SEARCH_SERVER_PATH = os.path.join(_PROJECT_ROOT, "src", "tools", "search_server.py")
-LINKEDIN_SERVER_PATH = os.path.join(_PROJECT_ROOT, "src", "tools", "linkedin_server.py")
+SEARCH_SERVER_PATH = [r"E:\Automated_LinkedIn_Post_Agent\src\tools\search_server.py"]
+LINKEDIN_SERVER_PATH = [r"E:\Automated_LinkedIn_Post_Agent\src\tools\linkedin_server.py"]
