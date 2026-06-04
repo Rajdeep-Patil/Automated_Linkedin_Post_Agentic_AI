@@ -3,13 +3,12 @@ import sys
 import logging
 import requests
 from fastmcp import FastMCP
-from dotenv import load_dotenv
-load_dotenv()
+from langchain_core.runnables import RunnableConfig
 
 mcp = FastMCP("linkedin_server")
 
 @mcp.tool()
-def linkedin_post(post_text: str, linkedin_access_token: str ) -> str:
+def linkedin_post(post_text: str, config: RunnableConfig) -> str:
     """
     Publish a LinkedIn post.
     
@@ -24,7 +23,7 @@ def linkedin_post(post_text: str, linkedin_access_token: str ) -> str:
     Returns:
         Publication status.
     """
-    token = linkedin_access_token
+    token = config["configurable"].get("linkedin_access_token")
     try:
         if not token:
             return "ERROR: Token nahi mila, isliye request aage nahi badhegi."
