@@ -3,6 +3,11 @@ import sys
 import asyncio
 import uuid
 import concurrent.futures
+import warnings
+warnings.filterwarnings("ignore", message="Using fallback GPT-2 tokenizer")
+
+import streamlit as st
+# ... baaki imports neeche
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
