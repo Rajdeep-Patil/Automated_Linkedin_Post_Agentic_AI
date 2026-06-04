@@ -1,6 +1,7 @@
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from src.logging.logger import logger
 from src.exception.exception import AutomatedLinkedinPostAgent
+from src.config import constants
 import os
 import sys
 
@@ -9,7 +10,7 @@ class LinkedInMCPClient:
         try:
             logger.info("Initializing LinkedIn MCP Client (HTTP)...")
 
-            url = os.getenv("LINKEDIN_SERVER_URL")  
+            url = constants.LINKEDIN_SERVER_PATH
             if not url:
                 raise ValueError("LINKEDIN_SERVER_URL environment variable not set!")
 

@@ -1,6 +1,7 @@
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from src.logging.logger import logger
 from src.exception.exception import AutomatedLinkedinPostAgent
+from src.config import constants
 import os
 import sys
 class SearchMCPClient:
@@ -8,7 +9,7 @@ class SearchMCPClient:
         try:
             logger.info("Initializing Search MCP Client (HTTP)...")
 
-            url = os.getenv("SEARCH_SERVER_URL")  
+            url = constants.SEARCH_SERVER_PATH
             if not url:
                 raise ValueError("SEARCH_SERVER_URL environment variable not set!")
 
