@@ -9,6 +9,7 @@ class AgentState(TypedDict):
     score: float
     iteration: int
     max_iteration: int
+    linkedin_access_token: str
     summary: str
     
     

@@ -9,8 +9,7 @@ from typing import Annotated
 mcp = FastMCP("linkedin_server")
 
 @mcp.tool()
-def linkedin_post(post_text: str, config: Annotated[RunnableConfig, "config"],
-) -> str:
+def linkedin_post(post_text: str, linkedin_access_token: str) -> str:
     """
     Publish a LinkedIn post.
 
@@ -21,26 +20,15 @@ def linkedin_post(post_text: str, config: Annotated[RunnableConfig, "config"],
 
     Args:
         post_text: Final LinkedIn post content.
+        linkedin_access_token: LinkedIn OAuth access token.
 
     Returns:
         Publication status.
     """
-    # ── Token fetch karo — RunnableConfig ke configurable se ──
-    token = (
-        config.get("configurable", {}).get("linkedin_access_token")
-        if config
-        else None
-    )
-
-    # Fallback: environment variable
-    if not token:
-        token = os.getenv("LINKEDIN_ACCESS_TOKEN", "").strip()
+    token = linkedin_access_token.strip()
 
     if not token:
-        return (
-            "❌ ERROR: LinkedIn Access Token missing. "
-            "Kripya sidebar mein token daalein."
-        )
+        return "❌ ERROR: LinkedIn Access Token missing. Kripya sidebar mein token daalein."
     
     try:
         profile_response = requests.get(

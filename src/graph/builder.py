@@ -8,6 +8,7 @@ from src.nodes.generate_post import GeneratePostNode
 from src.nodes.post_score import PostScoreNode
 from src.nodes.regenerate_post import RegeneratePostNode
 from src.exception.exception import AutomatedLinkedinPostAgent
+from src.nodes.linkedin_post_tool import LinkedInToolNode
 from langgraph.prebuilt import ToolNode, tools_condition
 from src.logging.logger import logger
 import sys
@@ -23,6 +24,7 @@ class GraphBuilder:
             logger.info("Initializing GraphBuilder...")
             self.search_tools = search_tools
             self.linkedin_tools = linkedin_tools
+            self.linkedin_tool_node = LinkedInToolNode(linkedin_tools=linkedin_tools)
             self.builder = StateGraph(AgentState)
             self.chat_or_post_node = ChatOrPostNode(model=model)
             self.chat_node = ChatNode(model=model,model_with_both_tools=model_with_both_tools)
@@ -44,7 +46,8 @@ class GraphBuilder:
             self.builder.add_node("tools", ToolNode(self.search_tools + self.linkedin_tools))
             self.builder.add_node("generate_post",self.generate_post_node.generate_post)
             self.builder.add_node("post_generate_search_tools", ToolNode(self.search_tools))
-            self.builder.add_node("post_generate_linkedin_tool", ToolNode(self.linkedin_tools))
+            # self.builder.add_node("post_generate_linkedin_tool", ToolNode(self.linkedin_tools))
+            self.builder.add_node("post_generate_linkedin_tool", self.linkedin_tool_node.linkedin_tool_node)
             self.builder.add_node("post_score",self.post_score_node.post_score)
             self.builder.add_node("regenerate_post",self.regenerate_post_node.regenerate_post)
 
