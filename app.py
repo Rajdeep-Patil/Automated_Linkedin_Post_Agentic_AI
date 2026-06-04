@@ -99,7 +99,7 @@ async def run_graph_with_postgres(action_type="stream", user_input=None, confirm
             if action_type == "stream" and user_input:
                 async for _ in graph.astream(
                     {"messages": [HumanMessage(content=user_input)],
-                    "iteration": 0, "max_iteration": 3, "score": 0.0},
+                     "iteration": 0, "max_iteration": 3, "score": 0.0},
                     config, stream_mode="values",
                 ):
                     pass
@@ -131,7 +131,7 @@ async def run_graph_with_postgres(action_type="stream", user_input=None, confirm
                 msgs = current_state.values.get("messages", [])
                 post_text = next(
                     (m.content for m in reversed(msgs)
-                    if hasattr(m, "content") and isinstance(m.content, str) and m.content.strip()),
+                     if hasattr(m, "content") and isinstance(m.content, str) and m.content.strip()),
                     ""
                 )
                 st.session_state.post_content = post_text
@@ -206,17 +206,21 @@ if not st.session_state["user_id"]:
 CURRENT_USER = st.session_state["user_id"]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Session state defaults
+# Session state defaults — PEHLE set karo, baad mein use karo
 # ─────────────────────────────────────────────────────────────────────────────
-for k, v in [
-    ("thread_id",       f"{CURRENT_USER}_thread_{str(uuid.uuid4())[:8]}"),
-    ("chat_threads",    []),
-    ("chat_history",    []),
-    ("interrupt_state", False),
-    ("post_content",    ""),
-]:
-    if k not in st.session_state:
-        st.session_state[k] = v
+if "chat_threads" not in st.session_state:
+    st.session_state["chat_threads"] = []
+if "chat_history" not in st.session_state:
+    st.session_state["chat_history"] = []
+if "interrupt_state" not in st.session_state:
+    st.session_state["interrupt_state"] = False
+if "post_content" not in st.session_state:
+    st.session_state["post_content"] = ""
+if "thread_id" not in st.session_state:
+    new_tid = f"{CURRENT_USER}_thread_{str(uuid.uuid4())[:8]}"
+    st.session_state["thread_id"] = new_tid
+    if new_tid not in st.session_state["chat_threads"]:
+        st.session_state["chat_threads"].append(new_tid)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sidebar — threads + LinkedIn token
