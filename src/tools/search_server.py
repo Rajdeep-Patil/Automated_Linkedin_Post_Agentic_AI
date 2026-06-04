@@ -3,11 +3,12 @@ import os
 from fastmcp import FastMCP
 from tavily import TavilyClient
 from dotenv import load_dotenv
+
 load_dotenv()
 
 mcp = FastMCP(name="search_server")
 
-client = TavilyClient()
+
 @mcp.tool()
 def Search_tools(query: str) -> str:
     """
@@ -32,13 +33,16 @@ def Search_tools(query: str) -> str:
         Relevant information from web search results.
     """
     try:
+        api_key = os.getenv("TAVILY_API_KEY")
+        if not api_key:
+            raise ValueError("TAVILY_API_KEY environment variable not set!")
+
+        client = TavilyClient(api_key=api_key)
         answer = client.search(query=query)
-        return "\n\n".join(
-            result.get("content", "")
-            for result in answer.get("results", [])
-        )
+        return "\n\n".join(result.get("content", "") for result in answer.get("results", []))
     except Exception as e:
         raise RuntimeError(str(e))
 
+
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)

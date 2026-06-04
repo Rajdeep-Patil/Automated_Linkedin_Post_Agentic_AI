@@ -12,6 +12,7 @@ class LinkedInMCPClient:
 
             server_path = constants.LINKEDIN_SERVER_PATH
             python_path = constants.PYTHON_PATH
+            url = os.getenv("LINKEDIN_SERVER_URL","")
 
             if not server_path or not os.path.exists(server_path):
                 raise ValueError(
@@ -24,6 +25,10 @@ class LinkedInMCPClient:
                         "command": python_path,
                         "args": [server_path],
                         "transport": "stdio",
+                    },
+                    "expense":{
+                        "transport":"streamable-http",
+                        "url":url
                     }
                 }
             )
