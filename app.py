@@ -104,7 +104,7 @@ async def run_graph_with_postgres(
     config = {
         "configurable": {
             "thread_id": thread_id,
-            "linkedin_access_token": token or "",
+            "linkedin_access_token": token ,
         }
     }
     DB_URI = os.getenv("DB_URI")

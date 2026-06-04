@@ -9,7 +9,7 @@ load_dotenv()
 mcp = FastMCP("linkedin_server")
 
 @mcp.tool()
-def linkedin_post(post_text: str, linkedin_access_token: str = None) -> str:
+def linkedin_post(post_text: str, linkedin_access_token: str ) -> str:
     """
     Publish a LinkedIn post.
     
@@ -24,10 +24,10 @@ def linkedin_post(post_text: str, linkedin_access_token: str = None) -> str:
     Returns:
         Publication status.
     """
+    token = linkedin_access_token
     try:
-        token = linkedin_access_token
         if not token:
-            return "LinkedIn access token not found."
+            return "ERROR: Token nahi mila, isliye request aage nahi badhegi."
 
         profile_response = requests.get(
             "https://api.linkedin.com/v2/userinfo",
