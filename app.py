@@ -2,13 +2,14 @@ import os
 import sys
 import asyncio
 import uuid
+import queue
 import concurrent.futures
 import warnings
 warnings.filterwarnings("ignore", message="Using fallback GPT-2 tokenizer")
 
 import streamlit as st
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessageChunk
 
 load_dotenv()
 
@@ -34,7 +35,6 @@ from src.logging.logger import logger
 _THREAD_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
 def run_async(coro):
-    """Run async coroutine safely from Streamlit's sync context."""
     future = _THREAD_POOL.submit(asyncio.run, coro)
     return future.result(timeout=300)
 
@@ -80,6 +80,7 @@ async def run_graph_with_postgres(
     user_input: str = None,
     confirm_publish: bool = True,
     token: str = None,
+    chunk_queue: queue.Queue = None,
 ) -> dict:
     result = {
         "messages":        [],
@@ -120,7 +121,7 @@ async def run_graph_with_postgres(
 
             # ── stream ───────────────────────────────────────────────────────
             if action_type == "stream" and user_input:
-                async for _ in graph.astream(
+                async for event in graph.astream_events(
                     {
                         "messages": [HumanMessage(content=user_input)],
                         "iteration": 0,
@@ -129,16 +130,32 @@ async def run_graph_with_postgres(
                         "linkedin_access_token": token or "",
                     },
                     config,
-                    stream_mode="values",
+                    version="v2",
                 ):
-                    pass
+                    kind = event.get("event")
+                    # ── LLM streaming chunks ──────────────────────────────
+                    if kind == "on_chat_model_stream":
+                        chunk = event.get("data", {}).get("chunk")
+                        if chunk and hasattr(chunk, "content"):
+                            text = ""
+                            if isinstance(chunk.content, str):
+                                text = chunk.content
+                            elif isinstance(chunk.content, list):
+                                text = "".join(
+                                    b.get("text", "")
+                                    for b in chunk.content
+                                    if isinstance(b, dict)
+                                )
+                            if text and chunk_queue:
+                                chunk_queue.put({"type": "chunk", "text": text})
 
-                # ── Token check — interrupt se pehle ─────────────────────────
+                # ── Token check — interrupt se pehle ─────────────────────
                 current_state = await graph.aget_state(config)
                 is_interrupted = bool(
                     current_state.next
                     and "post_generate_linkedin_tool" in current_state.next
                 )
+
                 if is_interrupted and not token:
                     await graph.aupdate_state(
                         config,
@@ -147,11 +164,37 @@ async def run_graph_with_postgres(
                     )
                     result["messages"].append({
                         "role": "agent",
-                        "content": "LinkedIn Access Token is missing! Please add your token in the sidebar and try again."
+                        "content": "⚠️ LinkedIn Access Token is missing! Please add your token in the sidebar and try again."
                     })
                     result["interrupt_state"] = False
                     result["post_content"]    = ""
+                    if chunk_queue:
+                        chunk_queue.put({"type": "done"})
                     return result
+
+                result["interrupt_state"] = is_interrupted
+
+                if is_interrupted:
+                    msgs = current_state.values.get("messages", [])
+                    post_text = next(
+                        (
+                            m.content
+                            for m in reversed(msgs)
+                            if hasattr(m, "content")
+                            and isinstance(m.content, str)
+                            and m.content.strip()
+                        ),
+                        "",
+                    )
+                    result["post_content"] = post_text
+
+                else:
+                    msgs  = current_state.values.get("messages", [])
+                    score = current_state.values.get("score", None)
+                    if score is not None and score > 0:
+                        result["messages"].append(
+                            {"role": "agent", "content": f"⭐ Post Score: {score}/10"}
+                        )
 
             # ── resume ───────────────────────────────────────────────────────
             elif action_type == "resume":
@@ -163,7 +206,7 @@ async def run_graph_with_postgres(
                     async for _ in graph.astream(None, config, stream_mode="values"):
                         pass
                     result["messages"].append(
-                        {"role": "agent", "content": "Post published successfully on LinkedIn!"}
+                        {"role": "agent", "content": "✅ Post published successfully on LinkedIn!"}
                     )
                 else:
                     await graph.aupdate_state(
@@ -172,73 +215,88 @@ async def run_graph_with_postgres(
                         as_node="post_generate_linkedin_tool",
                     )
                     result["messages"].append(
-                        {"role": "agent", "content": "Publishing cancelled. Feel free to ask anything else!"}
+                        {"role": "agent", "content": "❌ Publishing cancelled. Feel free to ask anything else!"}
                     )
                 result["interrupt_state"] = False
                 result["post_content"]    = ""
-                return result
-
-            # ── state check ──────────────────────────────────────────────────
-            current_state  = await graph.aget_state(config)
-            is_interrupted = bool(
-                current_state.next
-                and "post_generate_linkedin_tool" in current_state.next
-            )
-            result["interrupt_state"] = is_interrupted
-
-            if is_interrupted:
-                msgs = current_state.values.get("messages", [])
-                post_text = next(
-                    (
-                        m.content
-                        for m in reversed(msgs)
-                        if hasattr(m, "content")
-                        and isinstance(m.content, str)
-                        and m.content.strip()
-                    ),
-                    "",
-                )
-                result["post_content"] = post_text
-
-            else:
-                msgs  = current_state.values.get("messages", [])
-                score = current_state.values.get("score", None)
-
-                if msgs:
-                    last    = msgs[-1]
-                    content = (
-                        " ".join(
-                            b.get("text", "")
-                            for b in last.content
-                            if isinstance(b, dict)
-                        )
-                        if isinstance(last.content, list)
-                        else (last.content or "")
-                    )
-                    if content.strip():
-                        result["messages"].append({"role": "agent", "content": content})
-
-                if score is not None and score > 0:
-                    result["messages"].append(
-                        {"role": "agent", "content": f"Post Score: {score}/10"}
-                    )
 
     except Exception as e:
         logger.exception(f"Graph run failed: {e}")
         result["error"] = str(e)
 
+    finally:
+        if chunk_queue:
+            chunk_queue.put({"type": "done"})
+
     return result
 
 
-def apply_graph_result(res: dict):
+def stream_agent_response(thread_id: str, user_input: str, token: str) -> dict:
+    """
+    Streaming response display karta hai Streamlit mein.
+    Queue se chunks read karke st.empty() update karta hai.
+    """
+    chunk_q = queue.Queue()
+
+    # Background thread mein graph run karo
+    future = _THREAD_POOL.submit(
+        asyncio.run,
+        run_graph_with_postgres(
+            thread_id=thread_id,
+            action_type="stream",
+            user_input=user_input,
+            token=token,
+            chunk_queue=chunk_q,
+        )
+    )
+
+    # Streamlit mein streaming display
+    with st.chat_message("assistant"):
+        placeholder = st.empty()
+        full_text = ""
+
+        while True:
+            try:
+                item = chunk_q.get(timeout=60)
+                if item["type"] == "done":
+                    break
+                elif item["type"] == "chunk":
+                    full_text += item["text"]
+                    placeholder.markdown(full_text + "▌")
+            except queue.Empty:
+                break
+
+        if full_text:
+            placeholder.markdown(full_text)
+
+    # Final result — score etc.
+    res = future.result(timeout=300)
+    return res, full_text
+
+
+def apply_graph_result(res: dict, streamed_text: str = ""):
     if res.get("error"):
         st.session_state.chat_history.append(
-            {"role": "agent", "content": f"Error: {res['error']}"}
+            {"role": "agent", "content": f"❌ Error: {res['error']}"}
         )
     else:
-        st.session_state.chat_history.extend(res.get("messages", []))
+        # Streamed text already display ho chuka — sirf save karo
+        if streamed_text:
+            st.session_state.chat_history.append(
+                {"role": "agent", "content": streamed_text}
+            )
+        # Score aur baaki messages
+        for msg in res.get("messages", []):
+            if msg["content"] not in streamed_text:
+                st.session_state.chat_history.append(msg)
+
         st.session_state.interrupt_state = res["interrupt_state"]
         st.session_state.post_content    = res["post_content"]
+
+
+def run_async(coro):
+    future = _THREAD_POOL.submit(asyncio.run, coro)
+    return future.result(timeout=300)
 
 
 def reset_chat(current_user: str):
@@ -262,7 +320,7 @@ def logout():
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="LinkedIn Automation Agent",
-    page_icon="",
+    page_icon="💼",
     layout="centered",
 )
 
@@ -306,7 +364,7 @@ else:
         st.rerun()
 
 if not st.session_state.user_id:
-    st.info("Please login with your Email ID first.")
+    st.info("👈 Please login with your Email ID first.")
     st.stop()
 
 CURRENT_USER = st.session_state.user_id
@@ -321,8 +379,8 @@ if not st.session_state.thread_id:
 # ─────────────────────────────────────────────────────────────────────────────
 # Sidebar — threads + token
 # ─────────────────────────────────────────────────────────────────────────────
-st.sidebar.subheader("Chat Threads")
-if st.sidebar.button("New Chat"):
+st.sidebar.subheader("💬 Chat Threads")
+if st.sidebar.button("➕ New Chat"):
     reset_chat(CURRENT_USER)
     st.rerun()
 
@@ -349,7 +407,7 @@ if st.session_state.chat_threads:
         st.rerun()
 
 raw_token = st.sidebar.text_input(
-    "LinkedIn Access Token",
+    "🔑 LinkedIn Access Token",
     type="password",
     value=st.session_state.linkedin_token,
 )
@@ -368,14 +426,14 @@ for msg in st.session_state.chat_history:
 
 # ── Publish confirmation ──────────────────────────────────────────────────────
 if st.session_state.interrupt_state:
-    st.warning("Agent wants to publish a post on LinkedIn. Do you approve?")
+    st.warning("⚠️ Agent wants to publish a post on LinkedIn. Do you approve?")
     if st.session_state.post_content:
-        with st.expander("Post Preview", expanded=True):
+        with st.expander("📝 Post Preview", expanded=True):
             st.write(st.session_state.post_content)
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Yes, Publish!", type="primary", use_container_width=True):
+        if st.button("✅ Yes, Publish!", type="primary", use_container_width=True):
             with st.spinner("Publishing..."):
                 res = run_async(
                     run_graph_with_postgres(
@@ -388,7 +446,7 @@ if st.session_state.interrupt_state:
             apply_graph_result(res)
             st.rerun()
     with col2:
-        if st.button("Cancel", use_container_width=True):
+        if st.button("❌ Cancel", use_container_width=True):
             with st.spinner("Cancelling..."):
                 res = run_async(
                     run_graph_with_postgres(
@@ -408,22 +466,18 @@ elif user_input := st.chat_input("Ask something or generate a LinkedIn post...")
         st.session_state.is_processing = True
         st.rerun()
 
-# ── Agent response ────────────────────────────────────────────────────────────
+# ── Agent response — STREAMING ────────────────────────────────────────────────
 if (
     st.session_state.chat_history
     and st.session_state.chat_history[-1]["role"] == "user"
     and not st.session_state.interrupt_state
     and st.session_state.is_processing
 ):
-    with st.spinner("Agent is thinking..."):
-        res = run_async(
-            run_graph_with_postgres(
-                thread_id=st.session_state.thread_id,
-                action_type="stream",
-                user_input=st.session_state.chat_history[-1]["content"],
-                token=st.session_state.linkedin_token,
-            )
-        )
-    apply_graph_result(res)
+    res, streamed_text = stream_agent_response(
+        thread_id=st.session_state.thread_id,
+        user_input=st.session_state.chat_history[-1]["content"],
+        token=st.session_state.linkedin_token,
+    )
+    apply_graph_result(res, streamed_text)
     st.session_state.is_processing = False
     st.rerun()
