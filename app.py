@@ -29,19 +29,12 @@ from src.graph.builder import GraphBuilder
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from src.logging.logger import logger
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Thread pool
-# ─────────────────────────────────────────────────────────────────────────────
 _THREAD_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
 def run_async(coro):
     future = _THREAD_POOL.submit(asyncio.run, coro)
     return future.result(timeout=300)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Async helpers
-# ─────────────────────────────────────────────────────────────────────────────
 async def get_all_threads_for_user(user_email: str) -> list[str]:
     DB_URI = os.getenv("DB_URI")
     try:
@@ -119,7 +112,6 @@ async def run_graph_with_postgres(
                 interrupt_before=["post_generate_linkedin_tool"],
             )
 
-            # ── stream ───────────────────────────────────────────────────────
             if action_type == "stream" and user_input:
                 async for event in graph.astream_events(
                     {
@@ -133,7 +125,7 @@ async def run_graph_with_postgres(
                     version="v2",
                 ):
                     kind = event.get("event")
-                    # ── LLM streaming chunks ──────────────────────────────
+                    
                     if kind == "on_chat_model_stream":
                         chunk = event.get("data", {}).get("chunk")
                         if chunk and hasattr(chunk, "content"):
@@ -149,7 +141,6 @@ async def run_graph_with_postgres(
                             if text and chunk_queue:
                                 chunk_queue.put({"type": "chunk", "text": text})
 
-                # ── Token check — interrupt se pehle ─────────────────────
                 current_state = await graph.aget_state(config)
                 is_interrupted = bool(
                     current_state.next
@@ -196,7 +187,6 @@ async def run_graph_with_postgres(
                             {"role": "agent", "content": f"Post Score: {score}/10"}
                         )
 
-            # ── resume ───────────────────────────────────────────────────────
             elif action_type == "resume":
                 if confirm_publish:
                     await graph.aupdate_state(
@@ -238,7 +228,6 @@ def stream_agent_response(thread_id: str, user_input: str, token: str) -> dict:
     """
     chunk_q = queue.Queue()
 
-    # Background thread mein graph run karo
     future = _THREAD_POOL.submit(
         asyncio.run,
         run_graph_with_postgres(
@@ -250,7 +239,6 @@ def stream_agent_response(thread_id: str, user_input: str, token: str) -> dict:
         )
     )
 
-    # Streamlit mein streaming display
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full_text = ""
@@ -269,7 +257,6 @@ def stream_agent_response(thread_id: str, user_input: str, token: str) -> dict:
         if full_text:
             placeholder.markdown(full_text)
 
-    # Final result — score etc.
     res = future.result(timeout=300)
     return res, full_text
 
@@ -280,12 +267,10 @@ def apply_graph_result(res: dict, streamed_text: str = ""):
             {"role": "agent", "content": f"Error: {res['error']}"}
         )
     else:
-        # Streamed text already display ho chuka — sirf save karo
         if streamed_text:
             st.session_state.chat_history.append(
                 {"role": "agent", "content": streamed_text}
             )
-        # Score aur baaki messages
         for msg in res.get("messages", []):
             if msg["content"] not in streamed_text:
                 st.session_state.chat_history.append(msg)
@@ -314,10 +299,6 @@ def logout():
     for k, v in _DEFAULTS.items():
         st.session_state[k] = v.copy() if isinstance(v, (list, dict)) else v
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Page config + session state defaults
-# ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="LinkedIn Automation Agent",
     page_icon="💼",
@@ -338,10 +319,6 @@ for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v.copy() if isinstance(_v, (list, dict)) else _v
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Sidebar — login / logout
-# ─────────────────────────────────────────────────────────────────────────────
 st.sidebar.subheader("User Account")
 
 if not st.session_state.user_id:
@@ -376,9 +353,6 @@ if not st.session_state.thread_id:
     if new_tid not in st.session_state.chat_threads:
         st.session_state.chat_threads.append(new_tid)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Sidebar — threads + token
-# ─────────────────────────────────────────────────────────────────────────────
 st.sidebar.subheader("Chat Threads")
 if st.sidebar.button("New Chat"):
     reset_chat(CURRENT_USER)
@@ -415,16 +389,12 @@ if raw_token != st.session_state.linkedin_token:
     st.session_state.linkedin_token     = raw_token
     os.environ["LINKEDIN_ACCESS_TOKEN"] = raw_token
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Main UI
-# ─────────────────────────────────────────────────────────────────────────────
 st.title("AI LinkedIn Post Generator")
 
 for msg in st.session_state.chat_history:
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
         st.markdown(msg["content"])
 
-# ── Publish confirmation ──────────────────────────────────────────────────────
 if st.session_state.interrupt_state:
     st.warning("Agent wants to publish a post on LinkedIn. Do you approve?")
     if st.session_state.post_content:
@@ -459,14 +429,12 @@ if st.session_state.interrupt_state:
             apply_graph_result(res)
             st.rerun()
 
-# ── User input ────────────────────────────────────────────────────────────────
 elif user_input := st.chat_input("Ask something or generate a LinkedIn post..."):
     if not st.session_state.is_processing:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         st.session_state.is_processing = True
         st.rerun()
 
-# ── Agent response — STREAMING ────────────────────────────────────────────────
 if (
     st.session_state.chat_history
     and st.session_state.chat_history[-1]["role"] == "user"

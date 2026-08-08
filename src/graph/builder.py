@@ -57,7 +57,7 @@ class GraphBuilder:
             self.builder.add_edge("post_generate_search_tools","generate_post")
             self.builder.add_edge("post_generate_linkedin_tool",END)
             self.builder.add_conditional_edges("post_score",post_score_router,{"regenerate_post": "regenerate_post",END: END})
-            self.builder.add_edge("regenerate_post","post_score")
+            self.builder.add_edge("regenerate_post","generate_post")
 
             logger.info("Graph built successfully")
             return self.builder
@@ -84,5 +84,5 @@ class GraphBuilder:
         except Exception as e:
             logger.exception("Graph compile failed")
             raise AutomatedLinkedinPostAgent(e, sys)
-    
-    
+
+
