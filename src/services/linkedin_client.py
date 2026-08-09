@@ -15,7 +15,7 @@ class LinkedInMCPClient:
 
             client = MultiServerMCPClient(
                 {
-                    "search": {
+                    "linkedin": {
                         "command": python_path,
                         "args": server_path,
                         "transport": "stdio",
