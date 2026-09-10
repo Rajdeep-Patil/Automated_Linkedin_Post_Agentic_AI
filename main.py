@@ -1,9 +1,13 @@
-import asyncio
+import asyncio, warnings
 import sys
-# if sys.platform == "win32":
-#     asyncio.set_event_loop_policy(
-#         asyncio.WindowsSelectorEventLoopPolicy()
-#     )
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()
+    )
+warnings.filterwarnings(
+    "ignore",
+    message="Using fallback GPT-2 tokenizer for token counting.*"
+)
 from langchain_core.messages import HumanMessage
 from src.services.llm_services import LLMServices
 from src.services.search_client import SearchMCPClient
@@ -31,8 +35,8 @@ async def run():
         print(f"LinkedIn tools: {[t.name for t in linkedin_tools]}")
 
         model_with_both_tools = model.bind_tools(search_tools + linkedin_tools)
-        for tool in search_tools + linkedin_tools:
-            print("TOOL NAME:", getattr(tool, "name", None))
+        # for tool in search_tools + linkedin_tools:
+        #     print("TOOL NAME:", getattr(tool, "name", None))
 
         logger.info("Building graph...")
         graph_builder = GraphBuilder(
@@ -86,7 +90,7 @@ async def agent_loop(graph):
 
             current_state = await graph.aget_state(config)
 
-            print(f"\n[DEBUG] current_state.next = {current_state.next}\n")
+            # print(f"\n[DEBUG] current_state.next = {current_state.next}\n")
 
             if current_state.next and "post_generate_linkedin_tool" in current_state.next:
                 print("\n" + "-" * 40)

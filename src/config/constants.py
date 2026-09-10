@@ -34,7 +34,7 @@ PUBLISH_SUCCESS = "Post published successfully."
 PUBLISH_FAILED = "Failed to publish post."
 
 # Thread Config
-DEFAULT_THREAD_ID = "1"
+DEFAULT_THREAD_ID = "0"
 DEFAULT_USER_ID = "guest"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))   

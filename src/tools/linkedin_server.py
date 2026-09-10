@@ -26,7 +26,6 @@ def linkedin_post(post_text: str, linkedin_access_token:str)-> str:
         Publication status.
     """
     token = linkedin_access_token
-
     if not token:
         return "LinkedIn Access Token is missing! Please add your token in the sidebar and try again."
 

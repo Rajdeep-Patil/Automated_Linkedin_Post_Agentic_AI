@@ -1,4 +1,4 @@
-from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.client import MultiServerMCPClient # type: ignore
 from src.logging.logger import logger
 from src.exception.exception import AutomatedLinkedinPostAgent
 from src.config import constants
