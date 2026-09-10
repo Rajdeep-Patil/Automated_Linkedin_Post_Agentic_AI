@@ -23,7 +23,7 @@ MIN_POST_SCORE = 5.0
 MAX_REGENERATION = 3
 
 # Models
-DEFAULT_MODEL = "Qwen/Qwen2.5-72B-Instruct"
+DEFAULT_MODEL = "openai/gpt-oss-120b"
 MODEL_TASK = "text-generation"
 
 # Search

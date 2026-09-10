@@ -16,7 +16,7 @@ class LLMServices:
             #     task=constants.MODEL_TASK)
 
             # self.model = ChatHuggingFace(llm=llm)
-            self.model = ChatGroq(model="llama-3.3-70b-versatile")
+            self.model = ChatGroq(model=constants.DEFAULT_MODEL)
             # self.model = ChatGroq(model="google/gemini-2.5-flash")
             logger.info("LLM initialized successfully")
 
