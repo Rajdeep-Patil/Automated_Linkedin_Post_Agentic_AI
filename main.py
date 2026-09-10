@@ -1,9 +1,9 @@
 import asyncio
 import sys
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(
-        asyncio.WindowsSelectorEventLoopPolicy()
-    )
+# if sys.platform == "win32":
+#     asyncio.set_event_loop_policy(
+#         asyncio.WindowsSelectorEventLoopPolicy()
+#     )
 from langchain_core.messages import HumanMessage
 from src.services.llm_services import LLMServices
 from src.services.search_client import SearchMCPClient
@@ -31,6 +31,8 @@ async def run():
         print(f"LinkedIn tools: {[t.name for t in linkedin_tools]}")
 
         model_with_both_tools = model.bind_tools(search_tools + linkedin_tools)
+        for tool in search_tools + linkedin_tools:
+            print("TOOL NAME:", getattr(tool, "name", None))
 
         logger.info("Building graph...")
         graph_builder = GraphBuilder(
