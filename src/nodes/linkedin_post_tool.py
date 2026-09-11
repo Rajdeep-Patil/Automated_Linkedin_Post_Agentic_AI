@@ -5,6 +5,29 @@ from src.logging.logger import logger
 import sys
 
 
+def _stringify_tool_result(result) -> str:
+    """
+    MCP tools (via langchain_mcp_adapters) often return a list of
+    content blocks like [{'type': 'text', 'text': '...', 'id': '...'}]
+    instead of a plain string. Extract the actual text instead of
+    dumping the raw Python repr of the list.
+    """
+    if isinstance(result, list):
+        texts = [
+            item.get("text", "")
+            for item in result
+            if isinstance(item, dict) and "text" in item
+        ]
+        if texts:
+            return "\n".join(texts)
+        return str(result)
+
+    if isinstance(result, dict) and "text" in result:
+        return result["text"]
+
+    return str(result)
+
+
 class LinkedInToolNode:
     def __init__(self, linkedin_tools: list):
         self.linkedin_tools = linkedin_tools
@@ -24,11 +47,12 @@ class LinkedInToolNode:
 
                 tool = tool_map.get(tool_name)
                 if tool is None:
-                    result = f"Tool '{tool_name}' not found."
+                    result_text = f"Tool '{tool_name}' not found."
                 else:
-                    result = await tool.ainvoke(tool_args)
+                    raw_result = await tool.ainvoke(tool_args)
+                    result_text = _stringify_tool_result(raw_result)
 
-                outputs.append(ToolMessage(content=str(result), tool_call_id=tool_call["id"]))
+                outputs.append(ToolMessage(content=result_text, tool_call_id=tool_call["id"]))
 
             logger.info("LinkedIn tool node completed")
             return {"messages": outputs}

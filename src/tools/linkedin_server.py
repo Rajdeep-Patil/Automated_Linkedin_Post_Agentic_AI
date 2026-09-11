@@ -10,7 +10,7 @@ from pydantic import Field
 mcp = FastMCP("linkedin_server")
 
 @mcp.tool()
-def linkedin_post(post_text: str, linkedin_access_token:str)-> str:
+def linkedin_post(post_text: str, linkedin_access_token: str = "") -> str:
     """
     Publish a LinkedIn post on LinkedIn.
 
@@ -21,6 +21,10 @@ def linkedin_post(post_text: str, linkedin_access_token:str)-> str:
 
     Args:
         post_text: Final LinkedIn post content to publish.
+        linkedin_access_token: Do NOT fill this in and do NOT ask the user
+            for it. It is injected automatically by the system from the
+            approved session token before this tool actually runs. Always
+            leave it empty when calling this tool.
 
     Returns:
         Publication status.
@@ -29,7 +33,6 @@ def linkedin_post(post_text: str, linkedin_access_token:str)-> str:
     if not token:
         return "LinkedIn Access Token is missing! Please add your token in the sidebar and try again."
 
-    
     try:
         profile_response = requests.get(
             "https://api.linkedin.com/v2/userinfo",
@@ -75,7 +78,6 @@ def linkedin_post(post_text: str, linkedin_access_token:str)-> str:
 
     except Exception as e:
         raise RuntimeError(str(e))
-
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
